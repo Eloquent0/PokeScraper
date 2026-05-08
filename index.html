@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>PokéDeal — Sealed Product Deal Finder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="scanline-overlay"></div>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo-block">
+        <span class="logo-icon">◈</span>
+        <span class="logo-text">POKÉDEAL</span>
+        <span class="logo-tag">SEALED ONLY</span>
+      </div>
+      <div class="header-meta">
+        <span class="status-pill" id="statusPill">● READY</span>
+        <span class="last-updated" id="lastUpdated">—</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="app">
+
+    <!-- Search Bar -->
+    <section class="search-section">
+      <div class="search-wrap">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search sealed product… e.g. Surging Sparks booster box">
+        <button class="search-btn" id="searchBtn">
+          <span class="search-btn-text">SCAN</span>
+          <span class="search-btn-icon">→</span>
+        </button>
+      </div>
+      <div class="search-tags">
+        <button class="tag-btn active" data-type="all">All Types</button>
+        <button class="tag-btn" data-type="booster_box">Booster Box</button>
+        <button class="tag-btn" data-type="etb">ETB</button>
+        <button class="tag-btn" data-type="booster_bundle">Bundle</button>
+        <button class="tag-btn" data-type="tin">Tin</button>
+        <button class="tag-btn" data-type="blister">Blister</button>
+        <button class="tag-btn" data-type="collection">Collection</button>
+      </div>
+    </section>
+
+    <!-- Controls Row -->
+    <section class="controls-row">
+      <div class="control-group">
+        <label class="ctrl-label">DEAL THRESHOLD</label>
+        <div class="threshold-wrap">
+          <input type="range" id="thresholdSlider" min="0" max="100" value="40" class="threshold-slider">
+          <span class="threshold-val" id="thresholdVal">+40% MSRP</span>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="ctrl-label">SORT BY</label>
+        <select id="sortSelect" class="ctrl-select">
+          <option value="deal_score">Deal Score</option>
+          <option value="landed_cost">Total Cost</option>
+          <option value="pct_above_msrp">% Above MSRP</option>
+          <option value="price">Listed Price</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label class="ctrl-label">SOURCE</label>
+        <select id="sourceSelect" class="ctrl-select">
+          <option value="all">All Sources</option>
+          <option value="ebay">eBay</option>
+          <option value="tcgplayer">TCGplayer</option>
+          <option value="mercari">Mercari</option>
+          <option value="manual">Manual Import</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <button class="ctrl-btn" id="exportCsvBtn">↓ CSV</button>
+        <button class="ctrl-btn" id="importUrlBtn">+ Import URL</button>
+        <button class="ctrl-btn" id="ebayApiBtn">⚙ eBay API Key</button>
+      </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <section class="stats-bar" id="statsBar" style="display:none;">
+      <div class="stat-item">
+        <span class="stat-num" id="statTotal">0</span>
+        <span class="stat-label">LISTINGS</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num" id="statDeals">0</span>
+        <span class="stat-label">DEALS FOUND</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num" id="statBest">—</span>
+        <span class="stat-label">BEST PRICE</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num" id="statMsrp">—</span>
+        <span class="stat-label">MSRP</span>
+      </div>
+      <div class="stat-item alert-stat" id="alertStat" style="display:none;">
+        <span class="stat-num alert-num" id="statAlert">0</span>
+        <span class="stat-label">🔥 HOT DEALS</span>
+      </div>
+    </section>
+
+    <!-- Alerts -->
+    <div class="alerts-container" id="alertsContainer"></div>
+
+    <!-- Results -->
+    <section class="results-section" id="resultsSection">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">◈</div>
+        <div class="empty-title">SCAN FOR DEALS</div>
+        <div class="empty-sub">Search for any sealed Pokémon product above, or import a URL manually.</div>
+        <div class="empty-sources">
+          <span>eBay</span><span>TCGplayer</span><span>Mercari</span><span>Whatnot</span><span>TikTok Shop</span>
+        </div>
+      </div>
+      <div class="results-grid" id="resultsGrid"></div>
+    </section>
+
+    <!-- Manual URL Import Modal -->
+    <div class="modal-overlay" id="importModal" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">IMPORT LISTING URL</span>
+          <button class="modal-close" id="importModalClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-desc">Paste a listing URL from any supported source. The tool will parse the product info for manual review.</p>
+          <label class="ctrl-label">LISTING URL</label>
+          <input type="text" id="importUrlInput" class="modal-input" placeholder="https://www.ebay.com/itm/...">
+          <label class="ctrl-label" style="margin-top:12px;">LISTED PRICE ($)</label>
+          <input type="number" id="importPrice" class="modal-input" placeholder="49.99" step="0.01">
+          <label class="ctrl-label" style="margin-top:12px;">SHIPPING ($) — leave blank if free</label>
+          <input type="number" id="importShipping" class="modal-input" placeholder="0.00" step="0.01">
+          <label class="ctrl-label" style="margin-top:12px;">PRODUCT NAME</label>
+          <input type="text" id="importName" class="modal-input" placeholder="Surging Sparks Booster Box">
+          <label class="ctrl-label" style="margin-top:12px;">SOURCE</label>
+          <select id="importSource" class="ctrl-select" style="width:100%;margin-top:4px;">
+            <option value="mercari">Mercari</option>
+            <option value="tcgplayer">TCGplayer</option>
+            <option value="whatnot">Whatnot</option>
+            <option value="tiktok">TikTok Shop</option>
+            <option value="lgs">Local Game Store</option>
+            <option value="other">Other</option>
+          </select>
+          <button class="modal-submit" id="importSubmit">ADD LISTING</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- eBay API Key Modal -->
+    <div class="modal-overlay" id="ebayModal" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">eBay API CONFIGURATION</span>
+          <button class="modal-close" id="ebayModalClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-desc">Enter your eBay Browse API key to enable live search. Get a free key at <a href="https://developer.ebay.com" target="_blank" style="color:var(--accent);">developer.ebay.com</a>.</p>
+          <label class="ctrl-label">APP ID (Client ID)</label>
+          <input type="text" id="ebayApiInput" class="modal-input" placeholder="YourApp-XXXX-XXXX-XXXX">
+          <p class="modal-desc" style="margin-top:8px;font-size:10px;opacity:0.6;">Key is stored in localStorage only — never sent anywhere except eBay's API.</p>
+          <button class="modal-submit" id="ebayApiSave">SAVE KEY</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="msrp.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
