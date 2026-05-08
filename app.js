@@ -309,7 +309,7 @@ function renderResults(listings) {
         </div>
         ` : '<div class="msrp-unknown">MSRP not in database — manual review</div>'}
       </div>
-      <a class="card-cta" href="${l.url}" target="_blank" rel="noopener noreferrer">
+      <a class="card-cta" ${l.url && l.url !== "#" ? `href="${l.url}" target="_blank" rel="noopener noreferrer"` : `href="#" onclick="event.preventDefault();alert('Demo listing — add your eBay API key to see real links.')" `}>
         VIEW LISTING →
       </a>
     `;
@@ -351,7 +351,7 @@ function checkAlerts() {
     alert.innerHTML = `
       <span class="alert-icon">${l.dealTier === "steal" ? "🔥" : "⚡"}</span>
       <span class="alert-text"><strong>${escHtml(truncate(l.title, 50))}</strong> — $${l.landedCost.toFixed(2)} landed (${l.pctAboveMsrp <= 0 ? Math.abs(l.pctAboveMsrp.toFixed(1)) + "% BELOW" : "+" + l.pctAboveMsrp.toFixed(1) + "% above"} MSRP)</span>
-      <a href="${l.url}" target="_blank" class="alert-cta">VIEW →</a>
+      <a ${l.url && l.url !== "#" ? `href="${l.url}" target="_blank"` : `href="#" onclick="event.preventDefault()"`} class="alert-cta">VIEW →</a>
       <button class="alert-dismiss" onclick="this.parentElement.remove()">✕</button>
     `;
     container.appendChild(alert);
