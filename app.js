@@ -13,6 +13,9 @@ let activeTypeFilter = "all";
 // ── Normalize product name ───────────────────────────────────
 function normalizeName(raw) {
   let s = (raw || "").toLowerCase()
+    // Handle apostrophe-s BEFORE stripping non-word chars, so
+    // "rocket's" becomes "rockets" instead of "rocket s".
+    .replace(/\b(\w+?)'s\b/gi, "$1s")
     .replace(/pokémon|pokemon/gi, "")
     .replace(/trading card game|tcg/gi, "")
     .replace(/elite trainer box/gi, "etb")
@@ -31,6 +34,8 @@ function normalizeName(raw) {
     .replace(/\blot of \d+\b/gi, "")
     .replace(/\s+/g, " ")
     .replace(/[^\w\s]/g, "")
+    // Drop trailing "premium collection" so ex Box variants alias cleanly
+    .replace(/\s*premium collection\s*$/gi, "")
     .trim();
   if (MSRP_ALIASES[s]) s = MSRP_ALIASES[s];
   return s;
