@@ -108,12 +108,13 @@ function detectQuantity(rawTitle) {
       // Sanity bounds. 2..50 is the realistic range for sealed lots.
       if (n < 2 || n > 50) continue;
 
-      // Reject content-description matches:
-      //  - "36 pack" / "36 packs" inside a booster box (box contains packs)
-      if (/booster box/.test(title) && /pack/.test(m[0])) continue;
-      //  - "N pack(s)" inside a Premium Collection / Collector Chest /
-      //    ex box (those are describing box contents, not lot quantity)
-      if (/premium collection|collector chest|ex box|ex premium/.test(title) && /pack/.test(m[0])) continue;
+      // Reject "N pack(s)" matches when the title describes a product where
+      // packs are the CONTENTS, not a count of products:
+      //  - booster box: 36 packs inside
+      //  - Premium Collection / ex Box / Collector Chest: 4 packs inside
+      //  - tin: 3 or 5 packs inside
+      //  - booster bundle: 6 packs inside
+      if (/pack/.test(m[0]) && /booster box|premium collection|collector chest|ex box|ex premium|tin|booster bundle/.test(title)) continue;
 
       return n;
     }

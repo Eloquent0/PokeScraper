@@ -240,10 +240,17 @@ def detect_quantity(raw_title: str) -> int:
         if n < 2 or n > 50:
             continue
         match_str = m.group(0)
-        if "booster box" in t and "pack" in match_str:
-            continue
-        if any(x in t for x in ("premium collection", "collector chest", "ex box", "ex premium")) \
-                and "pack" in match_str:
+        # "N pack(s)" inside any product where packs are the CONTENTS,
+        # not a count of products. Booster boxes (36 packs inside), Premium
+        # Collections / ex Boxes / Collector Chests (4 packs inside),
+        # tins (3 or 5 packs inside), booster bundles (6 packs inside).
+        if "pack" in match_str and any(x in t for x in (
+            "booster box",
+            "premium collection", "ex box", "ex premium",
+            "collector chest", "collectors chest",
+            "tin",
+            "booster bundle",
+        )):
             continue
         return n
     return 1
