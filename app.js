@@ -2,11 +2,17 @@
 // PokéDeal — Main App Logic
 // ============================================================
 
+// ── Config ───────────────────────────────────────────────────
+// The eBay proxy endpoint (Modal). After `modal deploy proxy.py`,
+// Modal prints a URL ending in `.modal.run` — paste the /search
+// URL here. Example:
+//   https://yourname--pokedeal-ebay-proxy-ebayproxy-search.modal.run
+const EBAY_PROXY_URL = "PASTE_YOUR_MODAL_SEARCH_URL_HERE";
+
 // ── State ────────────────────────────────────────────────────
 let allListings = [];
 let filteredListings = [];
 let activeTypeFilter = "all";
-let ebayApiKey = localStorage.getItem("pokedeal_ebay_key") || null;
 
 // ── Normalize product name ───────────────────────────────────
 function normalizeName(raw) {
@@ -107,33 +113,27 @@ function buildListing({ title, price, shipping, source, url, condition, imageUrl
   return msrpData ? scoreListing(listing) : { ...listing, pctAboveMsrp: null, dealScore: null, dealTier: "unknown" };
 }
 
-// ── eBay API Search ──────────────────────────────────────────
+// ── eBay Search (via proxy) ──────────────────────────────────
+// Calls the Modal proxy, which holds the eBay credentials server-side,
+// does the OAuth token exchange, and returns item/listing data only.
+// No API key is ever handled by the browser.
 async function searchEbay(query) {
-  if (!ebayApiKey) {
-    showNotification("eBay API key not set. Click ⚙ eBay API Key to add one.", "warn");
+  if (!EBAY_PROXY_URL || EBAY_PROXY_URL.startsWith("PASTE_")) {
+    showNotification("eBay proxy URL not configured — showing demo data.", "info");
     return [];
   }
   setStatus("Searching eBay…");
-  const sealedQuery = `${query} sealed pokemon`;
-  const endpoint = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(sealedQuery)}&category_ids=183454&limit=50&filter=conditionIds:{1000|1500},buyingOptions:{FIXED_PRICE}`;
+  const endpoint = `${EBAY_PROXY_URL}?q=${encodeURIComponent(query)}`;
   try {
-    const res = await fetch(endpoint, {
-      headers: {
-        "Authorization": `Bearer ${ebayApiKey}`,
-        "X-EBAY-C-MARKETPLACE-ID": "EBAYS-US",
-        "Content-Type": "application/json"
-      }
-    });
+    const res = await fetch(endpoint);
     if (!res.ok) {
-      if (res.status === 401) showNotification("eBay API key invalid or expired.", "error");
-      else showNotification(`eBay API error: ${res.status}`, "error");
+      showNotification(`eBay proxy error: ${res.status}`, "error");
       return [];
     }
     const data = await res.json();
     const items = data.itemSummaries || [];
-    // We deliberately ignore item.seller — no eBay user data is read or stored.
     return items
-      .filter(item => isSealedProduct(item.title))
+      .filter(item => isSealedProduct(item.title || ""))
       .map(item => buildListing({
         title:    item.title,
         price:    item.price?.value,
@@ -149,7 +149,7 @@ async function searchEbay(query) {
   }
 }
 
-// ── Demo / mock data (used when no API key) ──────────────────
+// ── Demo / mock data (used when proxy not configured) ────────
 function getMockListings(query) {
   const q = query.toLowerCase();
   const mockData = [
@@ -183,13 +183,15 @@ async function doSearch() {
 
   let results = [];
 
-  // Try eBay API
+  // Try eBay via proxy
   const ebayResults = await searchEbay(query);
   results = results.concat(ebayResults);
 
-  // If no eBay key or no results, use demo data
+  // If proxy not configured or no results, use demo data
   if (results.length === 0) {
-    if (!ebayApiKey) showNotification("No eBay API key — showing demo data. Add your key to search live.", "info");
+    if (!EBAY_PROXY_URL || EBAY_PROXY_URL.startsWith("PASTE_")) {
+      showNotification("No proxy configured — showing demo data. Set EBAY_PROXY_URL to search live.", "info");
+    }
     results = getMockListings(query);
   }
 
@@ -311,7 +313,7 @@ function renderResults(listings) {
         </div>
         ` : '<div class="msrp-unknown">MSRP not in database — manual review</div>'}
       </div>
-      <a class="card-cta" ${l.url && l.url !== "#" ? `href="${l.url}" target="_blank" rel="noopener noreferrer"` : `href="#" onclick="event.preventDefault();alert('Demo listing — add your eBay API key to see real links.')" `}>
+      <a class="card-cta" ${l.url && l.url !== "#" ? `href="${l.url}" target="_blank" rel="noopener noreferrer"` : `href="#" onclick="event.preventDefault();alert('Demo listing — configure the eBay proxy to see real links.')" `}>
         VIEW LISTING →
       </a>
     `;
@@ -478,21 +480,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("importSubmit").addEventListener("click", submitManualImport);
   document.getElementById("importModal").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal("importModal"); });
 
-  // eBay API modal
-  document.getElementById("ebayApiBtn").addEventListener("click", () => {
-    document.getElementById("ebayApiInput").value = ebayApiKey || "";
-    document.getElementById("ebayModal").style.display = "flex";
-  });
-  document.getElementById("ebayModalClose").addEventListener("click", () => closeModal("ebayModal"));
-  document.getElementById("ebayApiSave").addEventListener("click", () => {
-    const key = document.getElementById("ebayApiInput").value.trim();
-    if (!key) { showNotification("Enter a valid API key.", "warn"); return; }
-    ebayApiKey = key;
-    localStorage.setItem("pokedeal_ebay_key", key);
-    closeModal("ebayModal");
-    showNotification("eBay API key saved.", "success");
-  });
-  document.getElementById("ebayModal").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal("ebayModal"); });
+  // NOTE: The "eBay API Key" modal has been removed. Credentials now live
+  // server-side in the Modal proxy; the browser never handles an API key.
+  // If your index.html still has #ebayApiBtn / #ebayModal elements, you can
+  // delete them — they are no longer wired up here.
 
   // Load demo data on start
   allListings = getMockListings("");
