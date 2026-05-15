@@ -3,10 +3,6 @@
 // ============================================================
 
 // ── Config ───────────────────────────────────────────────────
-// The eBay proxy endpoint (Modal). After `modal deploy proxy.py`,
-// Modal prints a URL ending in `.modal.run` — paste the /search
-// URL here. Example:
-//   https://yourname--pokedeal-ebay-proxy-ebayproxy-search.modal.run
 const EBAY_PROXY_URL = "https://poketrovefinds--pokedeal-ebay-proxy-ebayproxy-search.modal.run";
 
 // ── State ────────────────────────────────────────────────────
@@ -20,9 +16,6 @@ function normalizeName(raw) {
     .replace(/pokémon|pokemon/gi, "")
     .replace(/trading card game|tcg/gi, "")
     .replace(/elite trainer box/gi, "etb")
-    // Strip seller-noise words (factory sealed, brand new, x1, lot of, etc.)
-    // so titles like "Charizard ex Premium Collection FACTORY SEALED NEW IN HAND"
-    // normalize to the same key as the MSRP entry.
     .replace(/\bfactory sealed\b/gi, "")
     .replace(/\bbrand new\b/gi, "")
     .replace(/\bnew sealed\b/gi, "")
@@ -33,21 +26,18 @@ function normalizeName(raw) {
     .replace(/\bofficial\b/gi, "")
     .replace(/\bauthentic\b/gi, "")
     .replace(/\bdisplay\b/gi, "")
-    .replace(/(?<!booster )\bbox\b(?=\s|$)/gi, "")  // strip trailing "box" except in "booster box"
-    .replace(/\bx\d+\b/gi, "")                // x1, x2 quantity markers
-    .replace(/\blot of \d+\b/gi, "")          // "lot of 2", "lot of 3"
+    .replace(/(?<!booster )\bbox\b(?=\s|$)/gi, "")
+    .replace(/\bx\d+\b/gi, "")
+    .replace(/\blot of \d+\b/gi, "")
     .replace(/\s+/g, " ")
     .replace(/[^\w\s]/g, "")
     .trim();
-  // resolve alias
   if (MSRP_ALIASES[s]) s = MSRP_ALIASES[s];
   return s;
 }
 
 function lookupMsrp(normalizedName) {
-  // exact match
   if (MSRP_TABLE[normalizedName]) return MSRP_TABLE[normalizedName];
-  // partial match
   for (const key of Object.keys(MSRP_TABLE)) {
     if (normalizedName.includes(key) || key.includes(normalizedName)) {
       return MSRP_TABLE[key];
@@ -71,10 +61,8 @@ function detectProductType(title) {
 
 function isSealedProduct(title) {
   const t = title.toLowerCase();
-  // Exclude singles / graded cards
   const singleKeywords = ["psa", "bgs", "cgc", "graded", "holo card", "reverse holo", "/165", "/091", "nm/m ", "lp ", " ex card", " v card", "pack fresh", "raw card", "single card"];
   if (singleKeywords.some(k => t.includes(k))) return false;
-  // Must have a sealed-product keyword
   const sealedKeywords = [
     "booster box", "etb", "elite trainer", "booster bundle", "blister",
     "tin", "mini tin", "collector chest", "collectors chest",
@@ -84,13 +72,57 @@ function isSealedProduct(title) {
   return sealedKeywords.some(k => t.includes(k));
 }
 
+// ── Detect quantity from a listing title ─────────────────────
+// Returns an integer >= 1. Returns 1 when no count is found or when
+// it looks like a mixed lot. Ignores numbers that describe contents
+// (e.g. "36 packs" inside a booster box title, "4 booster packs" inside
+// a Premium Collection title).
+function detectQuantity(rawTitle) {
+  const title = (rawTitle || "").toLowerCase();
+
+  // Reject mixed lots — "lot of 2 ETB and booster box", etc.
+  const hasLotPhrase = /\b(lot of|set of|bundle of)\b/i.test(title) ||
+                       /\bx\s?\d+\b|\b\d+\s?x\b/i.test(title) ||
+                       /\b\d+\s?(pk|pack)\b/i.test(title);
+  if (hasLotPhrase && /(\band\b|\+| with )/i.test(title)) return 1;
+
+  const patterns = [
+    /\blot of (\d{1,3})\b/i,
+    /\bset of (\d{1,3})\b/i,
+    /\bbundle of (\d{1,3})\b/i,
+    /\(\s*(\d{1,3})\s*\)/,
+    /\bx\s?(\d{1,3})\b/i,
+    /\b(\d{1,3})\s?x\b/i,
+    /\b(\d{1,3})\s?[- ]?(?:pack|pk)s?\b/i,
+  ];
+
+  for (const re of patterns) {
+    const m = title.match(re);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      // Sanity bounds. 2..50 is the realistic range for sealed lots.
+      if (n < 2 || n > 50) continue;
+
+      // Reject content-description matches:
+      //  - "36 pack" / "36 packs" inside a booster box (box contains packs)
+      if (/booster box/.test(title) && /pack/.test(m[0])) continue;
+      //  - "N pack(s)" inside a Premium Collection / Collector Chest /
+      //    ex box (those are describing box contents, not lot quantity)
+      if (/premium collection|collector chest|ex box|ex premium/.test(title) && /pack/.test(m[0])) continue;
+
+      return n;
+    }
+  }
+
+  return 1;
+}
+
 // ── Score a listing ──────────────────────────────────────────
 function scoreListing(listing) {
   const { landedCost, msrp } = listing;
   if (!msrp) return null;
   const pctAbove = ((landedCost - msrp) / msrp) * 100;
   listing.pctAboveMsrp = pctAbove;
-  // Score: 100 = at MSRP, 0 = 50%+ above, negative = below MSRP (steal)
   listing.dealScore = Math.max(0, Math.round(100 - pctAbove * 2));
   listing.dealTier = pctAbove <= 0    ? "steal"
                    : pctAbove <= 10   ? "hot"
@@ -101,27 +133,40 @@ function scoreListing(listing) {
 }
 
 // ── Build listing object ─────────────────────────────────────
-// NOTE: We intentionally do NOT store any eBay user data (e.g. seller
-// usernames). The app only persists item/listing/price data, which keeps
-// us eligible to opt out of eBay Marketplace Account Deletion notifications.
+// quantity > 1 → per-item math: price/shipping/landedCost are divided
+// so all downstream scoring/sorting/filtering operates per unit.
 function buildListing({ title, price, shipping, source, url, condition, imageUrl }) {
   const normalized = normalizeName(title);
   const msrpData   = lookupMsrp(normalized);
-  const shippingCost = (shipping === null || shipping === undefined)
+  const quantity   = detectQuantity(title);
+
+  const totalPrice    = Number(price);
+  const totalShipping = (shipping === null || shipping === undefined)
     ? (SHIPPING_ESTIMATES[source] || 5.99)
     : Number(shipping);
-  const landedCost = Number(price) + shippingCost;
+  const totalLanded   = totalPrice + totalShipping;
+
+  const perPrice    = totalPrice / quantity;
+  const perShipping = totalShipping / quantity;
+  const perLanded   = totalLanded / quantity;
+
   const listing = {
     id: Math.random().toString(36).slice(2),
     title,
     normalizedName: normalized,
     source,
     url,
-    price: Number(price),
-    shipping: shippingCost,
-    shippingFree: shippingCost === 0,
+    quantity,
+    // Per-item amounts (default for scoring & display)
+    price:        perPrice,
+    shipping:     perShipping,
+    landedCost:   perLanded,
+    // Total amounts (what the listing actually charges)
+    totalPrice,
+    totalShipping,
+    totalLanded,
+    shippingFree:      totalShipping === 0,
     shippingEstimated: (shipping === null || shipping === undefined),
-    landedCost,
     msrp: msrpData?.msrp || null,
     msrpData,
     productType: msrpData?.type || detectProductType(title),
@@ -135,9 +180,6 @@ function buildListing({ title, price, shipping, source, url, condition, imageUrl
 }
 
 // ── eBay Search (via proxy) ──────────────────────────────────
-// Calls the Modal proxy, which holds the eBay credentials server-side,
-// does the OAuth token exchange, and returns item/listing data only.
-// No API key is ever handled by the browser.
 async function searchEbay(query) {
   if (!EBAY_PROXY_URL || EBAY_PROXY_URL.startsWith("PASTE_")) {
     showNotification("eBay proxy URL not configured — showing demo data.", "info");
@@ -170,33 +212,6 @@ async function searchEbay(query) {
   }
 }
 
-// ── Demo / mock data (used when proxy not configured) ────────
-function getMockListings(query) {
-  const q = query.toLowerCase();
-  const mockData = [
-    { title: "Surging Sparks Booster Box Sealed Pokemon TCG", price: 155.00, shipping: 0,    source: "ebay" },
-    { title: "Surging Sparks Booster Box Factory Sealed",     price: 162.00, shipping: 4.99, source: "ebay" },
-    { title: "Surging Sparks ETB Elite Trainer Box Sealed",   price: 52.99,  shipping: 0,    source: "tcgplayer" },
-    { title: "Surging Sparks ETB Sealed New",                 price: 55.00,  shipping: 3.99, source: "mercari" },
-    { title: "Prismatic Evolutions ETB Sealed",               price: 89.99,  shipping: 0,    source: "ebay" },
-    { title: "Prismatic Evolutions Booster Bundle Sealed",    price: 28.00,  shipping: 4.99, source: "mercari" },
-    { title: "Paradox Rift Booster Box Sealed Pokemon",       price: 129.99, shipping: 0,    source: "ebay" },
-    { title: "Pokemon 151 ETB Elite Trainer Box Sealed",      price: 58.00,  shipping: 5.99, source: "whatnot" },
-    { title: "Temporal Forces Booster Bundle Sealed",         price: 21.99,  shipping: 0,    source: "tcgplayer" },
-    { title: "Stellar Crown ETB Sealed New",                  price: 48.00,  shipping: 0,    source: "ebay" },
-    { title: "Prismatic Evolutions Super Premium Collection Sealed", price: 120.00, shipping: 0, source: "ebay" },
-    { title: "Journey Together Booster Box Sealed",           price: 148.00, shipping: 6.99, source: "lgs" },
-  ];
-
-  return mockData
-    .filter(m => {
-      if (!q || q.length < 2) return true;
-      return m.title.toLowerCase().includes(q) ||
-             normalizeName(m.title).includes(q);
-    })
-    .map(m => buildListing(m));
-}
-
 // ── Main search ──────────────────────────────────────────────
 async function doSearch() {
   const query = document.getElementById("searchInput").value.trim();
@@ -204,21 +219,17 @@ async function doSearch() {
 
   let results = [];
 
-  // Try eBay via proxy
   const ebayResults = await searchEbay(query);
   results = results.concat(ebayResults);
 
-  // If no results, inform user (do not use demo/mock data)
   if (results.length === 0) {
     if (!EBAY_PROXY_URL || EBAY_PROXY_URL.startsWith("PASTE_")) {
       showNotification("No proxy configured — add EBAY proxy or client token to search live.", "info");
     } else {
       showNotification("No results found.", "info");
     }
-    // leave results empty — no demo data fallback
   }
 
-  // Add any manually imported listings
   const manualListings = allListings.filter(l => l.source === "manual");
   results = results.concat(manualListings);
 
@@ -240,7 +251,7 @@ function applyFiltersAndRender() {
     if (activeTypeFilter !== "all" && l.productType !== activeTypeFilter) return false;
     if (sourceFilter !== "all" && l.source !== sourceFilter) return false;
     if (l.msrp && l.pctAboveMsrp > threshold) return false;
-    if (l.uncertain) return true; // keep uncertain ones for review
+    if (l.uncertain) return true;
     return true;
   });
 
@@ -276,6 +287,7 @@ function renderResults(listings) {
     const card = document.createElement("div");
     card.className = `listing-card tier-${l.dealTier}`;
     if (l.uncertain) card.classList.add("uncertain");
+    if (l.quantity > 1) card.classList.add("multi-qty");
 
     const pctLabel = l.pctAboveMsrp !== null
       ? (l.pctAboveMsrp <= 0 ? `${Math.abs(l.pctAboveMsrp.toFixed(1))}% BELOW MSRP 🔥` : `+${l.pctAboveMsrp.toFixed(1)}% above MSRP`)
@@ -283,7 +295,7 @@ function renderResults(listings) {
 
     const shippingLabel = l.shippingFree
       ? '<span class="free-ship">FREE SHIPPING</span>'
-      : `<span class="ship-cost">${l.shippingEstimated ? "~" : ""}$${l.shipping.toFixed(2)} shipping</span>`;
+      : `<span class="ship-cost">${l.shippingEstimated ? "~" : ""}$${l.shipping.toFixed(2)} shipping${l.quantity > 1 ? "/ea" : ""}</span>`;
 
     const tierBadge = {
       steal:      '<span class="tier-badge steal">🔥 STEAL</span>',
@@ -293,6 +305,10 @@ function renderResults(listings) {
       overpriced: '<span class="tier-badge over">✗ OVERPRICED</span>',
       unknown:    '<span class="tier-badge unknown">? REVIEW</span>',
     }[l.dealTier] || "";
+
+    const qtyBadge = l.quantity > 1
+      ? `<span class="qty-badge">×${l.quantity}</span>`
+      : "";
 
     const sourceIcon = {
       ebay:      "eBay",
@@ -305,9 +321,19 @@ function renderResults(listings) {
       other:     "↗",
     }[l.source] || "↗";
 
+    const landedLabel = l.quantity > 1 ? "$/ITEM" : "LANDED";
+
+    const totalLine = l.quantity > 1
+      ? `<div class="total-row">
+           <span class="total-label">TOTAL ×${l.quantity}</span>
+           <span class="total-cost">$${l.totalLanded.toFixed(2)}</span>
+         </div>`
+      : "";
+
     card.innerHTML = `
       <div class="card-top">
         <span class="source-tag src-${l.source}">${sourceIcon}</span>
+        ${qtyBadge}
         ${tierBadge}
         ${l.uncertain ? '<span class="uncertain-tag">⚠ REVIEW</span>' : ""}
       </div>
@@ -319,13 +345,14 @@ function renderResults(listings) {
       </div>
       <div class="card-pricing">
         <div class="price-row">
-          <span class="listed-price">$${l.price.toFixed(2)}</span>
+          <span class="listed-price">$${l.price.toFixed(2)}${l.quantity > 1 ? '<span class="per-item-suffix">/ea</span>' : ""}</span>
           ${shippingLabel}
         </div>
         <div class="landed-row">
-          <span class="landed-label">LANDED</span>
+          <span class="landed-label">${landedLabel}</span>
           <span class="landed-cost">$${l.landedCost.toFixed(2)}</span>
         </div>
+        ${totalLine}
         ${l.msrp ? `
         <div class="msrp-row">
           <span class="msrp-label">MSRP $${l.msrp.toFixed(2)}</span>
@@ -375,9 +402,10 @@ function checkAlerts() {
   hotDeals.slice(0, 3).forEach(l => {
     const alert = document.createElement("div");
     alert.className = "deal-alert";
+    const qtyNote = l.quantity > 1 ? ` (×${l.quantity} lot, $${l.landedCost.toFixed(2)}/ea)` : "";
     alert.innerHTML = `
       <span class="alert-icon">${l.dealTier === "steal" ? "🔥" : "⚡"}</span>
-      <span class="alert-text"><strong>${escHtml(truncate(l.title, 50))}</strong> — $${l.landedCost.toFixed(2)} landed (${l.pctAboveMsrp <= 0 ? Math.abs(l.pctAboveMsrp.toFixed(1)) + "% BELOW" : "+" + l.pctAboveMsrp.toFixed(1) + "% above"} MSRP)</span>
+      <span class="alert-text"><strong>${escHtml(truncate(l.title, 50))}</strong> — $${l.landedCost.toFixed(2)} landed${qtyNote} (${l.pctAboveMsrp <= 0 ? Math.abs(l.pctAboveMsrp.toFixed(1)) + "% BELOW" : "+" + l.pctAboveMsrp.toFixed(1) + "% above"} MSRP)</span>
       <a ${l.url && l.url !== "#" ? `href="${l.url}" target="_blank"` : `href="#" onclick="event.preventDefault()"`} class="alert-cta">VIEW →</a>
       <button class="alert-dismiss" onclick="this.parentElement.remove()">✕</button>
     `;
@@ -388,16 +416,19 @@ function checkAlerts() {
 // ── CSV Export ───────────────────────────────────────────────
 function exportCsv() {
   if (!filteredListings.length) { showNotification("No listings to export.", "warn"); return; }
-  const headers = ["Title","Source","Set","Type","Condition","Price","Shipping","Landed Cost","MSRP","% Above MSRP","Deal Tier","URL","Shipping Estimated","Uncertain Match"];
+  const headers = ["Title","Source","Set","Type","Qty","Price/ea","Shipping/ea","Landed/ea","Total Price","Total Shipping","Total Landed","MSRP","% Above MSRP","Deal Tier","URL","Shipping Estimated","Uncertain Match"];
   const rows = filteredListings.map(l => [
     `"${(l.title||"").replaceAll('"','""')}"`,
     l.source,
     `"${l.setName}"`,
     l.productType,
-    l.condition,
+    l.quantity,
     l.price.toFixed(2),
     l.shipping.toFixed(2),
     l.landedCost.toFixed(2),
+    l.totalPrice.toFixed(2),
+    l.totalShipping.toFixed(2),
+    l.totalLanded.toFixed(2),
     l.msrp ? l.msrp.toFixed(2) : "",
     l.pctAboveMsrp !== null ? l.pctAboveMsrp.toFixed(1) : "",
     l.dealTier,
@@ -495,7 +526,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("sourceSelect").addEventListener("change", () => { applyFiltersAndRender(); updateStats(); });
   document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
 
-  // Type filter tags
   document.querySelectorAll(".tag-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".tag-btn").forEach(b => b.classList.remove("active"));
@@ -506,7 +536,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Import modal
   document.getElementById("importUrlBtn").addEventListener("click", () => {
     document.getElementById("importModal").style.display = "flex";
   });
@@ -514,12 +543,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("importSubmit").addEventListener("click", submitManualImport);
   document.getElementById("importModal").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal("importModal"); });
 
-  // NOTE: The "eBay API Key" modal has been removed. Credentials now live
-  // server-side in the Modal proxy; the browser never handles an API key.
-  // If your index.html still has #ebayApiBtn / #ebayModal elements, you can
-  // delete them — they are no longer wired up here.
-
-  // Start with no demo data — empty listings
   allListings = [];
   applyFiltersAndRender();
   updateStats();
