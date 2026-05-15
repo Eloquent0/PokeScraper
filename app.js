@@ -208,12 +208,14 @@ async function doSearch() {
   const ebayResults = await searchEbay(query);
   results = results.concat(ebayResults);
 
-  // If proxy not configured or no results, use demo data
+  // If no results, inform user (do not use demo/mock data)
   if (results.length === 0) {
     if (!EBAY_PROXY_URL || EBAY_PROXY_URL.startsWith("PASTE_")) {
-      showNotification("No proxy configured — showing demo data. Set EBAY_PROXY_URL to search live.", "info");
+      showNotification("No proxy configured — add EBAY proxy or client token to search live.", "info");
+    } else {
+      showNotification("No results found.", "info");
     }
-    results = getMockListings(query);
+    // leave results empty — no demo data fallback
   }
 
   // Add any manually imported listings
@@ -517,10 +519,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // If your index.html still has #ebayApiBtn / #ebayModal elements, you can
   // delete them — they are no longer wired up here.
 
-  // Load demo data on start
-  allListings = getMockListings("");
+  // Start with no demo data — empty listings
+  allListings = [];
   applyFiltersAndRender();
   updateStats();
   checkAlerts();
-  document.getElementById("lastUpdated").textContent = "Demo data loaded";
+  document.getElementById("lastUpdated").textContent = "Ready";
 });
