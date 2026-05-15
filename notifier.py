@@ -433,6 +433,12 @@ def gc_seen():
 
 
 # ── Main entry point ────────────────────────────────────────
+@app.function(image=image)
+def clear_seen():
+    """Wipe the seen-listings dict so previously-suppressed deals can re-fire."""
+    keys = list(seen_listings.keys())
+    seen_listings.clear()
+    print(f"cleared {len(keys)} seen listing IDs")
 @app.function(
     image=image,
     secrets=[
