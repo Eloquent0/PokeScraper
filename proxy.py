@@ -136,7 +136,6 @@ class EbayProxy:
 
         params = {
             "q": f"{q} sealed pokemon",
-            "category_ids": "183454",
             "limit": "50",
             "filter": "conditionIds:{1000|1500},buyingOptions:{FIXED_PRICE}",
         }
