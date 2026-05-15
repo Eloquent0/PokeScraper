@@ -7,7 +7,7 @@
 // Modal prints a URL ending in `.modal.run` — paste the /search
 // URL here. Example:
 //   https://yourname--pokedeal-ebay-proxy-ebayproxy-search.modal.run
-const EBAY_PROXY_URL = "PASTE_YOUR_MODAL_SEARCH_URL_HERE";
+const EBAY_PROXY_URL = "https://poketrovefinds--pokedeal-ebay-proxy-ebayproxy-search.modal.run";
 
 // ── State ────────────────────────────────────────────────────
 let allListings = [];
