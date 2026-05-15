@@ -27,16 +27,16 @@ const MSRP_TABLE = {
 
   // ── Standard Poké Ball Tins (3-pack, 2025 line) ─────────────
   // Each tin = 3 booster packs + coin/promo. $24.99 MSRP retail.
-  "poke ball tin":                                { msrp: 24.99, type: "tin", set: "Misc" },
-  "great ball tin":                               { msrp: 24.99, type: "tin", set: "Misc" },
-  "ultra ball tin":                               { msrp: 24.99, type: "tin", set: "Misc" },
-  "premier ball tin":                             { msrp: 24.99, type: "tin", set: "Misc" },
-  "repeat ball tin":                              { msrp: 24.99, type: "tin", set: "Misc" },
-  "master ball tin":                              { msrp: 24.99, type: "tin", set: "Misc" },
-  "dive ball tin":                                { msrp: 24.99, type: "tin", set: "Misc" },
-  "luxury ball tin":                              { msrp: 24.99, type: "tin", set: "Misc" },
-  "quick ball tin":                               { msrp: 24.99, type: "tin", set: "Misc" },
-  "moon ball tin":                                { msrp: 24.99, type: "tin", set: "Misc" },
+  "poke ball tin":                                { msrp: 15.99, type: "tin", set: "Misc" },
+  "great ball tin":                               { msrp: 15.99, type: "tin", set: "Misc" },
+  "ultra ball tin":                               { msrp: 15.99, type: "tin", set: "Misc" },
+  "premier ball tin":                             { msrp: 15.99, type: "tin", set: "Misc" },
+  "repeat ball tin":                              { msrp: 15.99, type: "tin", set: "Misc" },
+  "master ball tin":                              { msrp: 15.99, type: "tin", set: "Misc" },
+  "dive ball tin":                                { msrp: 15.99, type: "tin", set: "Misc" },
+  "luxury ball tin":                              { msrp: 15.99, type: "tin", set: "Misc" },
+  "quick ball tin":                               { msrp: 15.99, type: "tin", set: "Misc" },
+  "moon ball tin":                                { msrp: 15.99, type: "tin", set: "Misc" },
 
   // ── Mini Tins ──────────────────────────────────────────────
   // 2 packs + art card. $9.99 MSRP.
