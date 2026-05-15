@@ -74,7 +74,10 @@ function scoreListing(listing) {
 }
 
 // ── Build listing object ─────────────────────────────────────
-function buildListing({ title, price, shipping, source, url, seller, condition, imageUrl }) {
+// NOTE: We intentionally do NOT store any eBay user data (e.g. seller
+// usernames). The app only persists item/listing/price data, which keeps
+// us eligible to opt out of eBay Marketplace Account Deletion notifications.
+function buildListing({ title, price, shipping, source, url, condition, imageUrl }) {
   const normalized = normalizeName(title);
   const msrpData   = lookupMsrp(normalized);
   const shippingCost = (shipping === null || shipping === undefined)
@@ -85,7 +88,6 @@ function buildListing({ title, price, shipping, source, url, seller, condition, 
     id: Math.random().toString(36).slice(2),
     title,
     normalizedName: normalized,
-    seller: seller || "—",
     source,
     url,
     price: Number(price),
@@ -129,6 +131,7 @@ async function searchEbay(query) {
     }
     const data = await res.json();
     const items = data.itemSummaries || [];
+    // We deliberately ignore item.seller — no eBay user data is read or stored.
     return items
       .filter(item => isSealedProduct(item.title))
       .map(item => buildListing({
@@ -137,7 +140,6 @@ async function searchEbay(query) {
         shipping: item.shippingOptions?.[0]?.shippingCost?.value ?? null,
         source:   "ebay",
         url:      item.itemWebUrl,
-        seller:   item.seller?.username,
         condition: item.condition,
         imageUrl: item.image?.imageUrl,
       }));
@@ -151,18 +153,18 @@ async function searchEbay(query) {
 function getMockListings(query) {
   const q = query.toLowerCase();
   const mockData = [
-    { title: "Surging Sparks Booster Box Sealed Pokemon TCG", price: 155.00, shipping: 0,    source: "ebay",      url: "#", seller: "pokecarddeals99" },
-    { title: "Surging Sparks Booster Box Factory Sealed",     price: 162.00, shipping: 4.99, source: "ebay",      url: "#", seller: "collector_vault" },
-    { title: "Surging Sparks ETB Elite Trainer Box Sealed",   price: 52.99,  shipping: 0,    source: "tcgplayer", url: "#", seller: "TCGplayer" },
-    { title: "Surging Sparks ETB Sealed New",                 price: 55.00,  shipping: 3.99, source: "mercari",   url: "#", seller: "cardflip_usa" },
-    { title: "Prismatic Evolutions ETB Sealed",               price: 89.99,  shipping: 0,    source: "ebay",      url: "#", seller: "sealed_deals" },
-    { title: "Prismatic Evolutions Booster Bundle Sealed",    price: 28.00,  shipping: 4.99, source: "mercari",   url: "#", seller: "poke_hunter_x" },
-    { title: "Paradox Rift Booster Box Sealed Pokemon",       price: 129.99, shipping: 0,    source: "ebay",      url: "#", seller: "retropackstore" },
-    { title: "Pokemon 151 ETB Elite Trainer Box Sealed",      price: 58.00,  shipping: 5.99, source: "whatnot",   url: "#", seller: "pokeseller_live" },
-    { title: "Temporal Forces Booster Bundle Sealed",         price: 21.99,  shipping: 0,    source: "tcgplayer", url: "#", seller: "TCGplayer" },
-    { title: "Stellar Crown ETB Sealed New",                  price: 48.00,  shipping: 0,    source: "ebay",      url: "#", seller: "packopener2024" },
-    { title: "Prismatic Evolutions Super Premium Collection Sealed", price: 120.00, shipping: 0, source: "ebay",  url: "#", seller: "bigbox_deals" },
-    { title: "Journey Together Booster Box Sealed",           price: 148.00, shipping: 6.99, source: "lgs",       url: "#", seller: "LocalGameStore" },
+    { title: "Surging Sparks Booster Box Sealed Pokemon TCG", price: 155.00, shipping: 0,    source: "ebay" },
+    { title: "Surging Sparks Booster Box Factory Sealed",     price: 162.00, shipping: 4.99, source: "ebay" },
+    { title: "Surging Sparks ETB Elite Trainer Box Sealed",   price: 52.99,  shipping: 0,    source: "tcgplayer" },
+    { title: "Surging Sparks ETB Sealed New",                 price: 55.00,  shipping: 3.99, source: "mercari" },
+    { title: "Prismatic Evolutions ETB Sealed",               price: 89.99,  shipping: 0,    source: "ebay" },
+    { title: "Prismatic Evolutions Booster Bundle Sealed",    price: 28.00,  shipping: 4.99, source: "mercari" },
+    { title: "Paradox Rift Booster Box Sealed Pokemon",       price: 129.99, shipping: 0,    source: "ebay" },
+    { title: "Pokemon 151 ETB Elite Trainer Box Sealed",      price: 58.00,  shipping: 5.99, source: "whatnot" },
+    { title: "Temporal Forces Booster Bundle Sealed",         price: 21.99,  shipping: 0,    source: "tcgplayer" },
+    { title: "Stellar Crown ETB Sealed New",                  price: 48.00,  shipping: 0,    source: "ebay" },
+    { title: "Prismatic Evolutions Super Premium Collection Sealed", price: 120.00, shipping: 0, source: "ebay" },
+    { title: "Journey Together Booster Box Sealed",           price: 148.00, shipping: 6.99, source: "lgs" },
   ];
 
   return mockData
@@ -288,7 +290,7 @@ function renderResults(listings) {
       <div class="card-body">
         <div class="card-title" title="${escHtml(l.title)}">${escHtml(truncate(l.title, 72))}</div>
         <div class="card-set">${escHtml(l.setName)} · ${formatType(l.productType)}</div>
-        <div class="card-seller">Seller: ${escHtml(l.seller)} · ${l.condition}</div>
+        <div class="card-condition">${escHtml(l.condition)}</div>
       </div>
       <div class="card-pricing">
         <div class="price-row">
@@ -361,10 +363,9 @@ function checkAlerts() {
 // ── CSV Export ───────────────────────────────────────────────
 function exportCsv() {
   if (!filteredListings.length) { showNotification("No listings to export.", "warn"); return; }
-  const headers = ["Title","Seller","Source","Set","Type","Condition","Price","Shipping","Landed Cost","MSRP","% Above MSRP","Deal Tier","URL","Shipping Estimated","Uncertain Match"];
+  const headers = ["Title","Source","Set","Type","Condition","Price","Shipping","Landed Cost","MSRP","% Above MSRP","Deal Tier","URL","Shipping Estimated","Uncertain Match"];
   const rows = filteredListings.map(l => [
     `"${(l.title||"").replaceAll('"','""')}"`,
-    `"${l.seller}"`,
     l.source,
     `"${l.setName}"`,
     l.productType,
@@ -404,7 +405,6 @@ function submitManualImport() {
     shipping: shipping ? parseFloat(shipping) : null,
     source:   "manual",
     url,
-    seller:   "Manual Import",
     condition: "New",
   });
 
