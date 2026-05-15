@@ -20,8 +20,22 @@ function normalizeName(raw) {
     .replace(/pokémon|pokemon/gi, "")
     .replace(/trading card game|tcg/gi, "")
     .replace(/elite trainer box/gi, "etb")
-    .replace(/booster box/gi, "booster box")
-    .replace(/booster bundle/gi, "booster bundle")
+    // Strip seller-noise words (factory sealed, brand new, x1, lot of, etc.)
+    // so titles like "Charizard ex Premium Collection FACTORY SEALED NEW IN HAND"
+    // normalize to the same key as the MSRP entry.
+    .replace(/\bfactory sealed\b/gi, "")
+    .replace(/\bbrand new\b/gi, "")
+    .replace(/\bnew sealed\b/gi, "")
+    .replace(/\bin hand\b/gi, "")
+    .replace(/\bsealed\b/gi, "")
+    .replace(/\bnew\b/gi, "")
+    .replace(/\bfactory\b/gi, "")
+    .replace(/\bofficial\b/gi, "")
+    .replace(/\bauthentic\b/gi, "")
+    .replace(/\bdisplay\b/gi, "")
+    .replace(/(?<!booster )\bbox\b(?=\s|$)/gi, "")  // strip trailing "box" except in "booster box"
+    .replace(/\bx\d+\b/gi, "")                // x1, x2 quantity markers
+    .replace(/\blot of \d+\b/gi, "")          // "lot of 2", "lot of 3"
     .replace(/\s+/g, " ")
     .replace(/[^\w\s]/g, "")
     .trim();
@@ -44,22 +58,29 @@ function lookupMsrp(normalizedName) {
 
 function detectProductType(title) {
   const t = title.toLowerCase();
-  if (t.includes("booster box"))        return "booster_box";
-  if (t.includes("etb") || t.includes("elite trainer")) return "etb";
+  if (t.includes("booster box"))                          return "booster_box";
+  if (t.includes("etb") || t.includes("elite trainer"))   return "etb";
   if (t.includes("booster bundle") || t.includes("bundle")) return "booster_bundle";
-  if (t.includes("tin"))                return "tin";
-  if (t.includes("blister"))            return "blister";
-  if (t.includes("collection") || t.includes("premium")) return "collection";
+  if (t.includes("collector chest") || t.includes("collectors chest")) return "collector_chest";
+  if (t.includes("mini tin"))                             return "mini_tin";
+  if (t.includes("ex premium collection") || t.includes("ex box") || t.includes("premium collection")) return "ex_premium_collection";
+  if (t.includes("tin"))                                  return "tin";
+  if (t.includes("blister"))                              return "blister";
   return "other";
 }
 
 function isSealedProduct(title) {
   const t = title.toLowerCase();
-  // Exclude singles
-  const singleKeywords = ["psa", "bgs", "cgc", "graded", "holo card", "reverse holo", "/165", "/091", "nm/m ", "lp ", " ex card", " v card", "pack fresh", "raw card"];
+  // Exclude singles / graded cards
+  const singleKeywords = ["psa", "bgs", "cgc", "graded", "holo card", "reverse holo", "/165", "/091", "nm/m ", "lp ", " ex card", " v card", "pack fresh", "raw card", "single card"];
   if (singleKeywords.some(k => t.includes(k))) return false;
-  // Must have a sealed keyword
-  const sealedKeywords = ["booster box", "etb", "elite trainer", "booster bundle", "blister", "tin", "collection box", "premium collection", "sealed", "factory sealed", "mini tin"];
+  // Must have a sealed-product keyword
+  const sealedKeywords = [
+    "booster box", "etb", "elite trainer", "booster bundle", "blister",
+    "tin", "mini tin", "collector chest", "collectors chest",
+    "premium collection", "ex box", "ex premium",
+    "sealed", "factory sealed"
+  ];
   return sealedKeywords.some(k => t.includes(k));
 }
 
@@ -442,7 +463,18 @@ function escHtml(s) {
 }
 function truncate(s, n) { return s.length > n ? s.slice(0, n) + "…" : s; }
 function formatType(t) {
-  return { booster_box:"Booster Box", etb:"ETB", booster_bundle:"Bundle", tin:"Tin", blister:"Blister", collection:"Collection", other:"Other" }[t] || t;
+  return {
+    booster_box:            "Booster Box",
+    etb:                    "ETB",
+    booster_bundle:         "Bundle",
+    tin:                    "Tin",
+    mini_tin:               "Mini Tin",
+    collector_chest:        "Collector Chest",
+    ex_premium_collection:  "ex Premium Collection",
+    blister:                "Blister",
+    collection:             "Collection",
+    other:                  "Other",
+  }[t] || t;
 }
 
 // ── DOM Wiring ───────────────────────────────────────────────
