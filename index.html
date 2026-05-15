@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>PokéDeal — Sealed Product Deal Finder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.c<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">om/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -78,7 +78,6 @@
       <div class="control-group">
         <button class="ctrl-btn" id="exportCsvBtn">↓ CSV</button>
         <button class="ctrl-btn" id="importUrlBtn">+ Import URL</button>
-        <button class="ctrl-btn" id="ebayApiBtn">⚙ eBay API Key</button>
       </div>
     </section>
 
@@ -149,23 +148,6 @@
             <option value="other">Other</option>
           </select>
           <button class="modal-submit" id="importSubmit">ADD LISTING</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- eBay API Key Modal -->
-    <div class="modal-overlay" id="ebayModal" style="display:none;">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">eBay API CONFIGURATION</span>
-          <button class="modal-close" id="ebayModalClose">✕</button>
-        </div>
-        <div class="modal-body">
-          <p class="modal-desc">Enter your eBay Browse API key to enable live search. Get a free key at <a href="https://developer.ebay.com" target="_blank" style="color:var(--accent);">developer.ebay.com</a>.</p>
-          <label class="ctrl-label">APP ID (Client ID)</label>
-          <input type="text" id="ebayApiInput" class="modal-input" placeholder="YourApp-XXXX-XXXX-XXXX">
-          <p class="modal-desc" style="margin-top:8px;font-size:10px;opacity:0.6;">Key is stored in localStorage only — never sent anywhere except eBay's API.</p>
-          <button class="modal-submit" id="ebayApiSave">SAVE KEY</button>
         </div>
       </div>
     </div>
